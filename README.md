@@ -16,28 +16,70 @@ Every `bash` tool invocation is wrapped with OS-level filesystem and network res
 
 ## Install
 
-```json
+<!-- ```json
 // opencode.json
 {
   "plugin": ["opencode-sandbox"]
 }
 ```
 
-The plugin is automatically installed from npm when OpenCode starts.
+The plugin is automatically installed from npm when OpenCode starts. -->
+
+### Manual installation
+
+This fork is NOT published to npm, and therefore cannot be simply installed by the "plugin" entry in the OpenCode config file. To cleanly install this plugin, build this package, link it to `~/.config/opencode/node_modules`, and load it with a single-file shim placed in `~/.config/opencode/plugins`. Detailed steps:
+
+1. Clone this repository to a place which is unlikely to be moved in the future.
+2. Enter the directory, install dependencies: `bun install`.
+3. Build plugin to generate dist/index.js: `bun run build`.
+4. Register as local linked package: `bun link`.
+5. Enter `~/.config/opencode` directory, run `bun link opencode-sandbox`.
+6. Place [the shim file](./.opencode/plugins/opencode-sandbox-shim.ts) in `~/.config/opencode/plugins`.
+
+After installation, launch OpenCode CLI. You should be able to see these briefly on the temporary black screen during startup:
+
+```
+[opencode-sandbox] Using sandbox with directory=/home/user/shared_agent_workspace, worktree=/.
+[opencode-sandbox] Fail-safe mode is used. Commands will fail if sandbox fails.
+[opencode-sandbox] Rejecting unsafe write path: /
+```
+
+### Defect and its relation with the private OpenCode fork
+
+This plugin works by transforming the command into a sandbox-wrapped form using the `tool.execute.before` hook. Unfortunately, the transformed command will also end in the UI and the chat history (which will be sent back to the model), possibly causing some confusion. Two measures are taken to mitigate this:
+
+- Add a note into the tool description, informing the model that commands will appear wrapped in the chat history:
+  "Note: Sandbox rewriting is on. Commands will be rewritten to enforce sandbox rules, and will appear in their rewritten forms in chat history."
+  Whether the model can understand this correctly is unknown though.
+- Instead of rewriting the command to its sandbox-wrapped form directly (which generates a massive wrapper command with all sandbox configurations embedded), the plugin writes the sandbox-wrapped form into a shim file (filename starting with `oc_sandboxed-`) under the temporary directory, and then rewrite the command to execute the shim instead.
+  For example, `ls -la` will finally become `/bin/sh /tmp/oc_sandboxed-f87cc52597ddf4183445d0d4287103cf 'ls -la'`.
+  The shim file deletes itself first when executed, and is cleaned up by the plugin again if it still exists.
+
+The shim file behavior can be disabled using config value `noShimFile`.
+
+I have not found a way to fully fix this defect using the OpenCode plugin API, so I have made a [private OpenCode fork](https://github.com/yezhiyi9670/opencode-fork) that exposes the executor function as `output.executeFn` in the `tool.definition` hook, which in turn allows the plugin to fully control execution behavior by wrapping the function. This is the cleanest approach and can achieve sandboxing while still leaving the original commands in the chat history. The plugin automatically uses this implementation when `output.executeFn` is exposed, and the defective `tool.execute.before` implementation when not.
+
+In short, take command `ls -la` for example:
+
+| Setup | Runs in sandbox? | What appears in chat history? |
+| - | - | - |
+| [Private OC fork](https://github.com/yezhiyi9670/opencode-fork) (recommended) | ✅ | `ls -la` |
+| Vanilla, `noShimFile: false` (default) | ✅ | `/bin/sh /tmp/oc_sandboxed-<hash> 'ls -la'` |
+| Vanilla, `noShimFile: true` | ✅ | `bwrap --die-with-parent <lots_of_gibberish> '"'"'"'"'"'"'"ls -la"'"'"'"'"'"'"'` |
 
 ### Linux prerequisites
 
-**1. Install bubblewrap:**
+**1. Install dependencies:**
 
 ```bash
 # Debian/Ubuntu
-sudo apt install bubblewrap
+sudo apt install bubblewrap socat ripgrep
 
 # Fedora
-sudo dnf install bubblewrap
+sudo dnf install bubblewrap socat ripgrep
 
 # Arch
-sudo pacman -S bubblewrap
+sudo pacman -S bubblewrap socat ripgrep
 ```
 
 **2. Ubuntu 24.04+ (AppArmor fix):**
@@ -238,6 +280,11 @@ Or in any config file:
 }
 ```
 
+### Other options
+
+- `{"noShimFile": true}` disables the shim file mitigation of the above-mentioned chat history defect. Not recommended since this will clutter context window and waste a lot of tokens. No effect when using with the private OpenCode fork.
+- `{"failOpen": true}` enables fail-open mode, which lets commands bypass sandbox if sandbox fails. Generally considered insecure and not recommended.
+
 ## How it works
 
 The plugin uses two OpenCode hooks:
@@ -257,9 +304,11 @@ Sandbox initialization is deferred until the first `bash` command, so the plugin
 
 `@anthropic-ai/sandbox-runtime` supports Windows through an argv-and-environment API, while OpenCode currently exposes this plugin's `bash` hook as a command string. Until those interfaces can be connected safely, this plugin leaves Windows commands unsandboxed rather than claiming protection it cannot enforce.
 
-### Fail-open design
+### Fail-safe by default, fail-open if needed
 
-If anything goes wrong (sandbox init fails, wrapping fails, platform unsupported), commands run normally without sandbox. The plugin never breaks your workflow.
+If anything goes wrong (sandbox init fails, wrapping fails, platform unsupported), commands fails with an error message that tells the model to avoid retrying immediately, ensuring that nothing bypasses sandbox.
+
+Setting `{"failOpen": true}` in config file will enable fail-open mode instead, where commands execute without sandbox if anything goes wrong. Suitable only if you do not care much about security but do not want to break your workflow (so why use this plugin in the first place)?
 
 ## Contributing
 
