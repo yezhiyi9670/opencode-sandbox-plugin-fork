@@ -36,13 +36,17 @@ This fork is NOT published to npm, and therefore cannot be simply installed by t
 5. Enter `~/.config/opencode` directory, run `bun link opencode-sandbox`.
 6. Place [the shim file](./.opencode/plugins/opencode-sandbox-shim.ts) in `~/.config/opencode/plugins`.
 
-After installation, launch OpenCode CLI. You should be able to see these briefly on the temporary black screen during startup:
+After installation, launch OpenCode CLI. You should be able to see these briefly on the temporary black screen (or in `~/.local/share/opencode/log/opencode.log`) during startup:
 
 ```
 [opencode-sandbox] Using sandbox with directory=/home/user/shared_agent_workspace, worktree=/.
 [opencode-sandbox] Fail-safe mode is used. Commands will fail if sandbox fails.
 [opencode-sandbox] Rejecting unsafe write path: /
 ```
+
+### Troubleshooting note
+
+The OpenCode log file (`~/.local/share/opencode/log/opencode.log`) may be helpful if the plugin does not seem to load or produces errors when using the shell tool. You may also want to check the trasient abnormal texts that appears in the TUI if there are some.
 
 ### Defect and its relation with the private OpenCode fork
 
