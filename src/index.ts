@@ -102,6 +102,143 @@ export const SandboxPlugin: Plugin = async ({ client, directory, worktree }) => 
       }))
 
   /**
+   * Junk files that may be generated in write-allowed dirs due to sandbox runtime defect.
+   * Needs to be cleaned up after execution.
+   * 
+   * Cleanup will only be triggered for files that are both empty and read-only.
+   * 
+   * See: https://github.com/anthropics/claude-code/issues/17087
+   * Also: https://www.npmjs.com/package/@anthropic-ai/sandbox-runtime/v/0.0.73 # Mandatory Deny Paths
+   */
+  const SRT_DEFECT_JUNK_FILES = [
+    '.claude/agents',
+    '.claude/commands',
+    '.bash_profile',
+    '.bashrc',
+    '.gitconfig',
+    '.gitmodules',
+    '.idea',
+    '.mcp.json',
+    '.profile',
+    '.ripgreprc',
+    '.vscode',
+    '.zprofile',
+    '.zshrc',
+  ]
+  /**
+   * For each directory, /*if a junk file starting with this prefix is removed/,
+   * the directory will also be considered for removal,
+   * and will be deleted as long as it is empty.
+   * 
+   * For nested directories,, children must be listed before parent.
+   * 
+   * Each entry must have a trailing slash.
+   */
+  const SRT_DEFECT_JUNK_DIRS = [
+    '.claude/'
+  ]
+  /**
+   * Handles SRT defect junk file removal for one writable path.
+   */
+  async function srt_defect_deleteJunkInDir(writablePath: string) {
+    const removedFiles: string[] = []
+    for(const junkFile of SRT_DEFECT_JUNK_FILES) {
+      const filePath = path.join(writablePath, junkFile)
+      try {
+        if(!await fs.exists(filePath)) {
+          continue
+        }
+        const stat = await fs.stat(filePath)
+        if(!stat.isFile) {
+          // Do not delete if not regular file
+          continue
+        }
+        if(stat.size != 0) {
+          // Do not delete non-empty ones
+          continue
+        }
+        if((stat.mode & 0o222) != 0) {
+          // Do not delete writable ones
+          continue
+        }
+        try {
+          await fs.rm(filePath)
+          removedFiles.push(junkFile)
+        } catch(err) {
+          void log(
+            'warn',
+            `Failed to remove SRT defect junk file ${filePath}: ${err}`
+          )
+        }
+      } catch(err) {
+        void log(
+          'warn',
+          `Failed to check SRT defect junk file ${filePath}: ${err}`
+        )
+      }
+    }
+    for(const junkDir of SRT_DEFECT_JUNK_DIRS) {
+      // const containsRemovedFile = removedFiles.filter(junkFile => junkFile.startsWith(junkDir)).length != 0
+      // if(!containsRemovedFile) {
+      //   continue
+      // }
+      const dirPath = path.join(writablePath, junkDir)
+      try {
+        if(!await fs.exists(dirPath)) {
+          continue
+        }
+        const stat = await fs.stat(dirPath)
+        if(!stat.isDirectory) {
+          // Do not delete if not regular directory
+          continue
+        }
+        const listing = await fs.readdir(dirPath)
+        if(listing.length != 0) {
+          // Do not delete if not empty
+          continue
+        }
+        try {
+          await fs.rmdir(dirPath)
+        } catch(err) {
+          void log(
+            'warn',
+            `Failed to remove SRT defect junk file ${dirPath}: ${err}`
+          )
+        }
+      } catch(err) {
+        void log(
+          'warn',
+          `Failed to check SRT defect junk directory ${dirPath}: ${err}`
+        )
+      }
+    }
+  }
+  async function srt_defect_clearAllJunk() {
+    for(const writablePath of runtimeConfig.filesystem.allowWrite) {
+      await srt_defect_deleteJunkInDir(writablePath)
+    }
+  }
+  // let junkClearTimeout: NodeJS.Timeout | null = null
+  // function srt_defect_scheduleJunkClear(delay: number) {
+  //   if(junkClearTimeout) {
+  //     clearTimeout(junkClearTimeout)
+  //   }
+  //   junkClearTimeout = setTimeout(async () => {junkClearTimeout = null; await srt_defect_clearAllJunk()}, delay)
+  // }
+  // function srt_defect_rescheduleJunkClear(delay: number) {
+  //   if(junkClearTimeout) {
+  //     clearTimeout(junkClearTimeout)
+  //     junkClearTimeout = setTimeout(async () => {junkClearTimeout = null; await srt_defect_clearAllJunk()}, delay)
+  //   }
+  // }
+  // process.on('beforeExit', async () => {
+  //   if(junkClearTimeout) {
+  //     clearTimeout(junkClearTimeout)
+  //   }
+  //   await srt_defect_clearAllJunk()
+  // })
+
+  /**
    * Lazily initialize sandbox and then modified tool params to wrap command with sandbox.
    * 
    * Returns whether the command is modified or not.
@@ -168,7 +305,7 @@ export const SandboxPlugin: Plugin = async ({ client, directory, worktree }) => 
   const originalCommands = new Map<string, string>()
   const hashPrefix = Math.random().toString()
   let hasToolDefinitionHookSucceeded = false
-
+  
   return {
     /**
      * Tool definition hook: Only suitable for a modified version of OpenCode.
@@ -194,7 +331,7 @@ export const SandboxPlugin: Plugin = async ({ client, directory, worktree }) => 
         )
         return
       }
-      output.executeFn = (params: any, ctx: any) => {
+      output.executeFn = (params, ctx) => {
         const self = this
 
         return Effect.gen(function* () {
@@ -263,8 +400,9 @@ export const SandboxPlugin: Plugin = async ({ client, directory, worktree }) => 
 
     /**
      * Vain attempt to restore the original command in session history after modification by the before execution hook.
-     * 
      * Does NOT work.
+     * 
+     * Note: This hook only activates for approved tool calls.
      */
     "tool.execute.after": async (input, output) => {
       if (!shellKinds.has(input.tool)) return
@@ -279,7 +417,9 @@ export const SandboxPlugin: Plugin = async ({ client, directory, worktree }) => 
         originalCommands.delete(commandID)
         _updated = true
       }
-    },
+
+      await srt_defect_clearAllJunk()
+    }
   }
 }
 
