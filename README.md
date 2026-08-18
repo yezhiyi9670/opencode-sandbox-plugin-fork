@@ -240,7 +240,8 @@ If your Git workflow needs to read a public key (for example `~/.ssh/id_ed25519.
       "~/.docker/config.json",
       "~/.npmrc",
       "~/.netrc",
-      "~/.env"
+      "~/.env",
+      ".git"
     ],
     "allowRead": ["~/.ssh/id_ed25519.pub"]
   }

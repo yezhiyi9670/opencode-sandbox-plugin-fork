@@ -23,17 +23,22 @@ export interface SandboxPluginConfig {
 }
 
 const DEFAULT_DENY_READ_DIRS = [
-  ".ssh",
-  ".gnupg",
-  ".aws/credentials",
-  ".azure",
-  ".config/gcloud",
-  ".config/gh",
-  ".kube",
-  ".docker/config.json",
-  ".npmrc",
-  ".netrc",
-  ".env",
+  "~/.ssh",
+  "~/.gnupg",
+  "~/.aws/credentials",
+  "~/.azure",
+  "~/.config/gcloud",
+  "~/.config/gh",
+  "~/.kube",
+  "~/.docker/config.json",
+  "~/.npmrc",
+  "~/.netrc",
+  "~/.env",
+  ".git"
+]
+
+const DEFAULT_DENY_WRITE_DIRS = [
+  '.git'
 ]
 
 const DEFAULT_ALLOWED_DOMAINS = [
@@ -101,10 +106,10 @@ export function resolveConfig(
   return {
     filesystem: {
       denyRead:
-        user?.filesystem?.denyRead ?? DEFAULT_DENY_READ_DIRS.map((p) => path.join(homeDir, p)),
+        user?.filesystem?.denyRead ?? DEFAULT_DENY_READ_DIRS,
       allowRead: user?.filesystem?.allowRead ?? [],
       allowWrite: writePaths,
-      denyWrite: user?.filesystem?.denyWrite ?? [],
+      denyWrite: user?.filesystem?.denyWrite ?? DEFAULT_DENY_WRITE_DIRS,
     },
     network: {
       allowedDomains: user?.network?.allowedDomains ?? DEFAULT_ALLOWED_DOMAINS,
