@@ -7,6 +7,8 @@ export interface SandboxPluginConfig {
   disabled?: boolean
   failOpen?: boolean
   noShimFile?: boolean
+  doNotRemoveJunkArgs?: boolean
+  doNotDeleteJunkFiles?: boolean
   filesystem?: {
     denyRead?: string[]
     allowRead?: string[]

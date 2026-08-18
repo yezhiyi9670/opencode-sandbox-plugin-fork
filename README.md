@@ -285,6 +285,18 @@ Or in any config file:
 }
 ```
 
+### Junk file prevention and removal
+
+Currently, `@anthropic-ai/sandbox-runtime` has a defect that might create several read-only empty files (like `.bashrc`, `.zprofile`, `.claude/agents`) in every writable directory and fail to clean them up. See "Mandatory Deny Paths" on the [npm page](https://www.npmjs.com/package/@anthropic-ai/sandbox-runtime/v/0.0.73) and [this Claude Code issue](https://github.com/anthropics/claude-code/issues/17087), an such behavior cannot be disabled by modifying sandbox configuration. The plugin mitigates with two approaches:
+
+- Eliminate these problematic arguments by replacing them away directly in the sandbox-wrapped command. Only arguments regarding non-already-existing files will be considered for removal. This is directly implemented with string replacement, which is not considered a "safe" way, though this does not seem to cause obvious security holes. One can set `"doNotRemoveJunkArgs": true` to disable this behavior.
+
+- Hunt for these files after execution and delete them. Only files that are both empty and read-only are considered for removal. One can set `"doNotDeleteJunkFiles": true` to disable this behavior. This approach may cause interference and execution failure when multiple concurrent commands are executed, but will not cause any interference if alll problematic arguments are eliminated in the first pass.
+
+Neither shall make any difference for "Mandatory Deny Files" that already exists in the directory.
+
+If `"doNotRemoveJunkArgs": true` is set but `"doNotDeleteJunkFiles": true` is not, a prompt will be added to tell the model to avoid concurrent commands.
+
 ### Other options
 
 - `{"noShimFile": true}` disables the shim file mitigation of the above-mentioned chat history defect. Not recommended since this will clutter context window and waste a lot of tokens. No effect when using with the private OpenCode fork.

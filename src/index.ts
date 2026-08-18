@@ -218,25 +218,33 @@ export const SandboxPlugin: Plugin = async ({ client, directory, worktree }) => 
       await srt_defect_deleteJunkInDir(writablePath)
     }
   }
-  // let junkClearTimeout: NodeJS.Timeout | null = null
-  // function srt_defect_scheduleJunkClear(delay: number) {
-  //   if(junkClearTimeout) {
-  //     clearTimeout(junkClearTimeout)
-  //   }
-  //   junkClearTimeout = setTimeout(async () => {junkClearTimeout = null; await srt_defect_clearAllJunk()}, delay)
-  // }
-  // function srt_defect_rescheduleJunkClear(delay: number) {
-  //   if(junkClearTimeout) {
-  //     clearTimeout(junkClearTimeout)
-  //     junkClearTimeout = setTimeout(async () => {junkClearTimeout = null; await srt_defect_clearAllJunk()}, delay)
-  //   }
-  // }
-  // process.on('beforeExit', async () => {
-  //   if(junkClearTimeout) {
-  //     clearTimeout(junkClearTimeout)
-  //   }
-  //   await srt_defect_clearAllJunk()
-  // })
+  /**
+   * Try to remove args that generate SRT defect junk files in the first place.
+   */
+  async function srt_defect_tryRemoveJunkArgs(command: string) {
+    for(const writablePath of runtimeConfig.filesystem.allowWrite) {
+      for(const junkFile of SRT_DEFECT_JUNK_FILES) {
+        const filePath = path.join(writablePath, junkFile)
+        if(await fs.exists(filePath)) {
+          // Do not remove junk arg corresponding to existent file
+          continue
+        }
+        // Replace only once
+        const escaper = new Shescape({})
+        const needles = [
+          ` --ro-bind /dev/null ${escaper.quote(filePath)} `,
+          ` --ro-bind /dev/null ${escaper.escape(filePath)} `
+        ]
+        for(const needle of needles) {
+          if(command.indexOf(needle) != -1) {
+            command = command.replace(needle, ' ')
+            break
+          }
+        }
+      }
+    }
+    return command
+  }
 
   /**
    * Lazily initialize sandbox and then modified tool params to wrap command with sandbox.
@@ -279,7 +287,11 @@ export const SandboxPlugin: Plugin = async ({ client, directory, worktree }) => 
         undefined,
         { commandId: 'command', commandText: command },
       )
-      params.command = newCommand
+      if(userConfig.doNotRemoveJunkArgs) {
+        params.command = newCommand
+      } else {
+        params.command = await srt_defect_tryRemoveJunkArgs(newCommand)
+      }
       return true
     } catch (err) {
       void log(
@@ -315,6 +327,15 @@ export const SandboxPlugin: Plugin = async ({ client, directory, worktree }) => 
     "tool.definition": async (input, output) => {
       if(!shellKinds.has(input.toolID)) {
         return
+      }
+      // The "avoid concurrent commands prompt" if concurrent commands are likely to interfere with each other.
+      if(userConfig.doNotRemoveJunkArgs && !userConfig.doNotDeleteJunkFiles) {
+        output.description += (
+          "\n" +
+          'Avoid invoking this tool for multiple times in one message unless explicitly told to do so. ' +
+          'They will run concurrently and are likely to fail due to certain concurrency conflicts.' +
+          "\n"
+        )
       }
       const executeFn = output.executeFn
       if(executeFn != undefined) {
@@ -402,6 +423,8 @@ export const SandboxPlugin: Plugin = async ({ client, directory, worktree }) => 
      * Vain attempt to restore the original command in session history after modification by the before execution hook.
      * Does NOT work.
      * 
+     * Also handles junk files removal.
+     * 
      * Note: This hook only activates for approved tool calls.
      */
     "tool.execute.after": async (input, output) => {
@@ -417,8 +440,9 @@ export const SandboxPlugin: Plugin = async ({ client, directory, worktree }) => 
         originalCommands.delete(commandID)
         _updated = true
       }
-
-      await srt_defect_clearAllJunk()
+      if (!userConfig.doNotDeleteJunkFiles) {
+        await srt_defect_clearAllJunk()
+      }
     }
   }
 }
