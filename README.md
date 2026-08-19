@@ -221,6 +221,12 @@ Path precedence is inherited from `@anthropic-ai/sandbox-runtime`:
 - Read: `allowRead` takes precedence over `denyRead`
 - Write: `denyWrite` takes precedence over `allowWrite`
 
+If reading is prohibited for a file or directory, writing will also be prohibited as long as such file or directory exists.
+
+> [!CAUTION]
+>
+> `denyWrite` does not provide protection for relative-path files or directories that do not pre-exist, unless the [Junk file prevention and removal workaround](#junk-file-prevention-and-removal) is fully disabled. Disabling the workaround will result in unwanted placeholder files to be created, which is a defect of the sandbox runtime itself.
+
 ### Example: allow git commit signing with SSH public key
 
 If your Git workflow needs to read a public key (for example `~/.ssh/id_ed25519.pub`) while keeping `~/.ssh` blocked by default, re-allow only that file:
@@ -241,7 +247,9 @@ If your Git workflow needs to read a public key (for example `~/.ssh/id_ed25519.
       "~/.npmrc",
       "~/.netrc",
       "~/.env",
-      ".git"
+      ".env",
+      ".secret",
+      ".secrets"
     ],
     "allowRead": ["~/.ssh/id_ed25519.pub"]
   }

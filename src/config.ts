@@ -38,6 +38,7 @@ const DEFAULT_DENY_READ_DIRS = [
   "~/.env",
   ".env",
   ".secret",
+  ".secrets",
 ]
 
 const DEFAULT_DENY_WRITE_DIRS = [

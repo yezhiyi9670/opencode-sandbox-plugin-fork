@@ -111,8 +111,11 @@ export const SandboxPlugin: Plugin = async ({ client, directory, worktree }) => 
    * Also: https://www.npmjs.com/package/@anthropic-ai/sandbox-runtime/v/0.0.73 # Mandatory Deny Paths
    */
   const SRT_DEFECT_JUNK_FILES = [
+    // Mandatory Deny Paths
     '.claude/agents',
     '.claude/commands',
+    '.git/hooks',
+    '.git/config',
     '.bash_profile',
     '.bashrc',
     '.gitconfig',
@@ -124,25 +127,20 @@ export const SandboxPlugin: Plugin = async ({ client, directory, worktree }) => 
     '.vscode',
     '.zprofile',
     '.zshrc',
-  ]
-  /**
-   * For each directory, /*if a junk file starting with this prefix is removed/,
-   * the directory will also be considered for removal,
-   * and will be deleted as long as it is empty.
-   * 
-   * For nested directories,, children must be listed before parent.
-   * 
-   * Each entry must have a trailing slash.
-   */
-  const SRT_DEFECT_JUNK_DIRS = [
-    '.claude/'
-  ]
+  ].concat(runtimeConfig.filesystem.denyWrite.filter(item => !path.isAbsolute(item)))
   /**
    * Handles SRT defect junk file removal for one writable path.
    */
   async function srt_defect_deleteJunkInDir(writablePath: string) {
     const removedFiles: string[] = []
+    const junkDirs: string[] = []
     for(const junkFile of SRT_DEFECT_JUNK_FILES) {
+      let parent = path.dirname(junkFile)
+      while(parent != '' && parent != '.') {
+        junkDirs.push(parent)
+        parent = path.dirname(parent)
+      }
+
       const filePath = path.join(writablePath, junkFile)
       try {
         if(!await fs.exists(filePath)) {
@@ -177,7 +175,7 @@ export const SandboxPlugin: Plugin = async ({ client, directory, worktree }) => 
         )
       }
     }
-    for(const junkDir of SRT_DEFECT_JUNK_DIRS) {
+    for(const junkDir of junkDirs) {
       // const containsRemovedFile = removedFiles.filter(junkFile => junkFile.startsWith(junkDir)).length != 0
       // if(!containsRemovedFile) {
       //   continue
