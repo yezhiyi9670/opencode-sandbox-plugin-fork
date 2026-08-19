@@ -36,6 +36,8 @@ const DEFAULT_DENY_READ_DIRS = [
   "~/.npmrc",
   "~/.netrc",
   "~/.env",
+  ".env",
+  ".secret",
 ]
 
 const DEFAULT_DENY_WRITE_DIRS = [
