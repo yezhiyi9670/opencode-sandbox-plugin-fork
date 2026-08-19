@@ -145,7 +145,7 @@ export async function loadConfig(projectDir: string): Promise<SandboxPluginConfi
     try {
       return JSON.parse(envConfig) as SandboxPluginConfig
     } catch {
-      console.warn("[opencode-sandbox] Invalid JSON in OPENCODE_SANDBOX_CONFIG, using defaults")
+      console.warn("[opencode-sandbox] Invalid JSON in OPENCODE_SANDBOX_CONFIG, using file-based config instead")
     }
   }
 

@@ -189,6 +189,12 @@ The `<project-name>` is the basename of the project directory (e.g., `my-app` fo
 
 If `XDG_CONFIG_HOME` is set, it is used instead of `~/.config`.
 
+> [!CAUTION]
+>
+> The configuration is selected according to the first-match-wins rule, so per-project config will not be merged with global config (nor does environment variable config), but will opaquely override it instead.
+>
+> Take approapriate precautions when writing a config file, and do not write a environment variable-based config too casually.
+
 ### Example: Global config
 
 ```json
