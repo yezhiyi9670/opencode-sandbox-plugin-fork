@@ -143,7 +143,10 @@ export async function loadConfig(projectDir: string): Promise<SandboxPluginConfi
   const envConfig = process.env.OPENCODE_SANDBOX_CONFIG
   if (envConfig) {
     try {
-      return JSON.parse(envConfig) as SandboxPluginConfig
+      const envConfigData = JSON.parse(envConfig) as SandboxPluginConfig
+      console.info("[opencode-sandbox] Environment variable OPENCODE_SANDBOX_CONFIG is used")
+      console.warn("[opencode-sandbox] Configuration will come exclusively from the environment variable, not the config files.")
+      return envConfigData
     } catch {
       console.warn("[opencode-sandbox] Invalid JSON in OPENCODE_SANDBOX_CONFIG, using file-based config instead")
     }
