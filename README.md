@@ -14,6 +14,8 @@ Every `bash` tool invocation is wrapped with OS-level filesystem and network res
 | **Linux** | `bubblewrap` (namespace isolation) |
 | **Windows** | Not currently supported by OpenCode's command-string hook (commands pass through) |
 
+Tested OpenCode versions: 1.18.18, 1.18.21
+
 ## Install
 
 <!-- ```json
