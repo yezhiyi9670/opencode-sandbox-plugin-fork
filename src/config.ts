@@ -131,10 +131,14 @@ export function getConfigDir(): string {
 }
 
 async function tryLoadJsonFile(filePath: string): Promise<SandboxPluginConfig | null> {
+  if (!await fs.exists(filePath)) {
+    return null
+  }
   try {
     const content = await fs.readFile(filePath, "utf-8")
     return JSON.parse(content) as SandboxPluginConfig
   } catch {
+    console.warn("[opencode-sandbox] Failed to read configuration from: " + filePath)
     return null
   }
 }
@@ -144,11 +148,11 @@ export async function loadConfig(projectDir: string): Promise<SandboxPluginConfi
   if (envConfig) {
     try {
       const envConfigData = JSON.parse(envConfig) as SandboxPluginConfig
-      console.info("[opencode-sandbox] Environment variable OPENCODE_SANDBOX_CONFIG is used")
-      console.warn("[opencode-sandbox] Configuration will come exclusively from the environment variable, not the config files.")
+      console.info("[opencode-sandbox] Using configuration from OPENCODE_SANDBOX_CONFIG.")
+      console.warn("[opencode-sandbox] Configuration will come EXCLUSIVELY from the environment variable, not the config files.")
       return envConfigData
     } catch {
-      console.warn("[opencode-sandbox] Invalid JSON in OPENCODE_SANDBOX_CONFIG, using file-based config instead")
+      console.warn("[opencode-sandbox] Invalid JSON in OPENCODE_SANDBOX_CONFIG. Skipping.")
     }
   }
 
@@ -158,10 +162,18 @@ export async function loadConfig(projectDir: string): Promise<SandboxPluginConfi
   const projectConfig = await tryLoadJsonFile(
     path.join(configDir, "projects", `${projectName}.json`),
   )
-  if (projectConfig) return projectConfig
+  if (projectConfig) {
+    console.info("[opencode-sandbox] Using configuration from PROJECT CONFIG FILE.")
+    console.warn("[opencode-sandbox] Configuration will come EXCLUSIVELY from project config file.")
+    return projectConfig
+  }
 
   const globalConfig = await tryLoadJsonFile(path.join(configDir, "config.json"))
-  if (globalConfig) return globalConfig
+  if (globalConfig) {
+    console.info("[opencode-sandbox] Using configuration from GLOBAL CONFIG FILE.")
+    return globalConfig
+  }
 
+  console.info("[opencode-sandbox] Using EMPTY configuration (hardcoded defaults will apply).")
   return {}
 }
